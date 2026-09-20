@@ -1,0 +1,12 @@
+i投屏
+
+This application is intended to include GPLv3-compatible AirPlay receiver
+components derived from UxPlay, RPiPlay, AirplayServer, ShairPlay and related
+projects. Their original copyright and license notices must remain with any
+vendored source files.
+
+The airplay module also vendors libplist (LGPL-2.1-or-later), llhttp (MIT),
+PlayFair (see its accompanying license), and links the OpenSSL Android AAR.
+Their license texts are distributed with the corresponding source or archive.
+
+The Android application code in this repository is distributed under GPLv3.
