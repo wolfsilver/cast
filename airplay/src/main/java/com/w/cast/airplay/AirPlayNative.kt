@@ -4,6 +4,7 @@ internal class AirPlayNative(
     private val listener: Listener
 ) {
     interface Listener {
+        fun onLog(message: String)
         fun onVideoFrame(data: ByteArray, h265: Boolean, timestampNtp: Long)
         fun onAudioFrame(data: ByteArray, codecType: Int, timestampNtp: Long)
     }
@@ -17,7 +18,8 @@ internal class AirPlayNative(
         return nativeStart(handle, keyFile)
     }
 
-    fun txtRecords(airplay: Boolean): Array<String> = nativeGetTxt(handle, airplay)
+    fun txtRecords(airplay: Boolean): Array<String> =
+        nativeGetTxt(handle, airplay)?.toList()?.toTypedArray() ?: emptyArray()
 
     fun stop() {
         if (handle != 0L) {
@@ -28,7 +30,7 @@ internal class AirPlayNative(
 
     private external fun nativeCreate(listener: Listener): Long
     private external fun nativeStart(handle: Long, keyFile: String): Int
-    private external fun nativeGetTxt(handle: Long, airplay: Boolean): Array<String>
+    private external fun nativeGetTxt(handle: Long, airplay: Boolean): Array<String>?
     private external fun nativeStop(handle: Long)
 
     companion object {

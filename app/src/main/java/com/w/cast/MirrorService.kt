@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.IBinder
 import android.net.wifi.WifiManager
@@ -23,21 +25,25 @@ class MirrorService : Service() {
         instance = this
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, notification())
+        AppLog.add("服务: 前台服务已启动")
+        logNetworkState()
         acquireMulticastLock()
         registry = ReceiverRegistry(
             listOf(
-                AirPlayReceiver(this),
+                AirPlayReceiver(this) { message -> AppLog.add("AirPlay: $message") },
                 DlnaReceiver(this),
                 GoogleCastReceiver()
             )
         )
-        registry.startAll()
+        val started = registry.startAll()
+        AppLog.add("服务: 已启动接收器=${started.map { it.id }}，全部状态=${registry.all().map { "${it.id}:${it.status}" }}")
         pendingSurface?.let(registry::setVideoSurface)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
+        AppLog.add("服务: 正在停止接收器")
         registry.stopAll()
         multicastLock?.let { if (it.isHeld) it.release() }
         pendingSurface = null
@@ -53,6 +59,28 @@ class MirrorService : Service() {
             setReferenceCounted(false)
             acquire()
         }
+        AppLog.add("网络: Wi-Fi multicast lock=${multicastLock?.isHeld}")
+    }
+
+    private fun logNetworkState() {
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val network = connectivity.activeNetwork
+        if (network == null) {
+            AppLog.add("网络: 没有活动网络")
+            return
+        }
+        val capabilities = connectivity.getNetworkCapabilities(network)
+        val transport = when {
+            capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi"
+            capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "蜂窝网络"
+            else -> "其他网络"
+        }
+        val addresses = connectivity.getLinkProperties(network)
+            ?.linkAddresses
+            ?.map { it.address.hostAddress }
+            ?.joinToString(",")
+            .orEmpty()
+        AppLog.add("网络: transport=$transport，地址=$addresses")
     }
 
     private fun createNotificationChannel() {

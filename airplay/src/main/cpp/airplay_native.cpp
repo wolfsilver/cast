@@ -18,6 +18,7 @@ constexpr char kTag[] = "CastAirPlay";
 struct AirPlayEngine {
     JavaVM* vm = nullptr;
     jobject callback = nullptr;
+    jmethodID onLog = nullptr;
     jmethodID onVideoFrame = nullptr;
     jmethodID onAudioFrame = nullptr;
     raop_t* raop = nullptr;
@@ -32,6 +33,16 @@ JNIEnv* attach(AirPlayEngine* engine) {
         engine->vm->AttachCurrentThread(&env, nullptr);
     }
     return env;
+}
+
+void emitLog(AirPlayEngine* engine, const char* message) {
+    if (!engine || !engine->callback || !engine->onLog) return;
+    JNIEnv* env = attach(engine);
+    if (!env) return;
+    jstring value = env->NewStringUTF(message ? message : "");
+    if (!value) return;
+    env->CallVoidMethod(engine->callback, engine->onLog, value);
+    env->DeleteLocalRef(value);
 }
 
 void sendVideo(void* opaque, raop_ntp_t*, video_decode_struct* frame) {
@@ -70,11 +81,12 @@ int setCodec(void*, video_codec_t codec) {
     return codec == VIDEO_CODEC_H264 || codec == VIDEO_CODEC_H265 ? 0 : -1;
 }
 
-void logMessage(void*, int level, const char* message) {
+void logMessage(void* opaque, int level, const char* message) {
     int priority = ANDROID_LOG_INFO;
     if (level <= LOGGER_ERR) priority = ANDROID_LOG_ERROR;
     else if (level == LOGGER_WARNING) priority = ANDROID_LOG_WARN;
     __android_log_print(priority, kTag, "%s", message ? message : "");
+    emitLog(static_cast<AirPlayEngine*>(opaque), message);
 }
 }
 
@@ -84,10 +96,11 @@ Java_com_w_cast_airplay_AirPlayNative_nativeCreate(JNIEnv* env, jobject, jobject
     env->GetJavaVM(&engine->vm);
     engine->callback = env->NewGlobalRef(callback);
     jclass callbackClass = env->GetObjectClass(callback);
+    engine->onLog = env->GetMethodID(callbackClass, "onLog", "(Ljava/lang/String;)V");
     engine->onVideoFrame = env->GetMethodID(callbackClass, "onVideoFrame", "([BZJ)V");
     engine->onAudioFrame = env->GetMethodID(callbackClass, "onAudioFrame", "([BIJ)V");
     env->DeleteLocalRef(callbackClass);
-    if (!engine->onVideoFrame || !engine->onAudioFrame) {
+    if (!engine->onLog || !engine->onVideoFrame || !engine->onAudioFrame) {
         env->DeleteGlobalRef(engine->callback);
         delete engine;
         return 0;
@@ -102,6 +115,7 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
 
     const char* keyPath = env->GetStringUTFChars(keyFile, nullptr);
     if (!keyPath) return -1;
+    emitLog(engine, "native: 开始启动 AirPlay 协议服务");
 
     raop_callbacks_t callbacks{};
     callbacks.cls = engine;
@@ -111,14 +125,20 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
     callbacks.video_set_codec = setCodec;
 
     engine->raop = raop_init(&callbacks);
-    if (!engine->raop || raop_init2(engine->raop, 1, "02:00:00:00:00:01", keyPath) != 0) {
-        if (engine->raop) raop_destroy(engine->raop);
-        engine->raop = nullptr;
+    if (!engine->raop) {
+        emitLog(engine, "native: raop_init 失败");
         env->ReleaseStringUTFChars(keyFile, keyPath);
         return -1;
     }
     raop_set_log_level(engine->raop, LOGGER_WARNING);
     raop_set_log_callback(engine->raop, logMessage, engine);
+    if (raop_init2(engine->raop, 1, "02:00:00:00:00:01", keyPath) != 0) {
+        emitLog(engine, "native: AirPlay 配对/HTTP 初始化失败");
+        if (engine->raop) raop_destroy(engine->raop);
+        engine->raop = nullptr;
+        env->ReleaseStringUTFChars(keyFile, keyPath);
+        return -1;
+    }
     raop_set_plist(engine->raop, "width", 1920);
     raop_set_plist(engine->raop, "height", 1080);
     raop_set_plist(engine->raop, "refreshRate", 60);
@@ -128,6 +148,8 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
     int dnssdError = 0;
     engine->dnssd = dnssd_init("i投屏", 7, reinterpret_cast<const char*>(hardwareAddress), 6, 0, &dnssdError);
     if (!engine->dnssd) {
+        const std::string errorMessage = "native: dnssd_init 失败，错误码 " + std::to_string(dnssdError);
+        emitLog(engine, errorMessage.c_str());
         raop_destroy(engine->raop);
         engine->raop = nullptr;
         env->ReleaseStringUTFChars(keyFile, keyPath);
@@ -135,9 +157,18 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
     }
     raop_set_dnssd(engine->raop, engine->dnssd);
     unsigned short port = 0;
-    if (raop_start_httpd(engine->raop, &port) != 0 ||
-        dnssd_prepare_raop(engine->dnssd, port) != 0 ||
+    if (raop_start_httpd(engine->raop, &port) != 0) {
+        emitLog(engine, "native: HTTP/RTSP 监听启动失败");
+        dnssd_destroy(engine->dnssd);
+        engine->dnssd = nullptr;
+        raop_destroy(engine->raop);
+        engine->raop = nullptr;
+        env->ReleaseStringUTFChars(keyFile, keyPath);
+        return -1;
+    }
+    if (dnssd_prepare_raop(engine->dnssd, port) != 0 ||
         dnssd_prepare_airplay(engine->dnssd, port) != 0) {
+        emitLog(engine, "native: AirPlay TXT 记录生成失败");
         dnssd_destroy(engine->dnssd);
         engine->dnssd = nullptr;
         raop_destroy(engine->raop);
@@ -147,6 +178,7 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
     }
     engine->running = true;
     env->ReleaseStringUTFChars(keyFile, keyPath);
+    emitLog(engine, "native: HTTP/RTSP 已监听，Android NsdManager 将广播服务");
     __android_log_print(ANDROID_LOG_INFO, kTag, "AirPlay listening on port %u", port);
     return static_cast<jint>(port);
 }

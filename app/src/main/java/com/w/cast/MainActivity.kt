@@ -8,19 +8,32 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
-import android.view.SurfaceView
 import android.view.SurfaceHolder
+import android.view.SurfaceView
+import android.graphics.Typeface
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 class MainActivity : Activity() {
     private lateinit var surfaceView: SurfaceView
+    private lateinit var logView: TextView
+    private val logListener: (String) -> Unit = { line ->
+        runOnUiThread { appendLog(line) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestNotificationPermission()
         setContentView(createContentView())
+        logView.text = AppLog.subscribe(logListener).joinToString("\n")
+        AppLog.add("界面: 已打开，等待接收器启动日志")
         startMirrorService()
+    }
+
+    override fun onDestroy() {
+        AppLog.unsubscribe(logListener)
+        super.onDestroy()
     }
 
     private fun createContentView(): LinearLayout {
@@ -47,7 +60,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         val subtitle = TextView(this).apply {
-            text = "AirPlay 接收器已启动\nDLNA 与 Google Cast 接口已预留"
+            text = "AirPlay 接收器日志"
             textSize = 15f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
@@ -60,6 +73,18 @@ class MainActivity : Activity() {
             addView(subtitle)
         }
 
+        logView = TextView(this).apply {
+            textSize = 12f
+            typeface = Typeface.MONOSPACE
+            setTextColor(Color.rgb(220, 230, 235))
+            setPadding(16, 12, 16, 12)
+            setBackgroundColor(Color.rgb(24, 34, 43))
+        }
+        val logScroll = ScrollView(this).apply {
+            addView(logView)
+        }
+        val logHeight = (220 * resources.displayMetrics.density).toInt()
+
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(16, 24, 32))
@@ -70,7 +95,16 @@ class MainActivity : Activity() {
                     weight = 1f
                 }
             )
+            addView(logScroll, LinearLayout.LayoutParams.MATCH_PARENT, logHeight)
         }
+    }
+
+    private fun appendLog(line: String) {
+        if (!::logView.isInitialized) return
+        if (logView.text.isNotEmpty()) logView.append("\n")
+        logView.append(line)
+        val scrollView = logView.parent as? ScrollView
+        scrollView?.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 
     private fun startMirrorService() {
