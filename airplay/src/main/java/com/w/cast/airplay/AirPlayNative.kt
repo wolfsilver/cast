@@ -10,12 +10,14 @@ internal class AirPlayNative(
 
     private var handle: Long = 0
 
-    fun start(keyFile: String): Boolean {
+    fun start(keyFile: String): Int {
         if (handle == 0L) {
             handle = nativeCreate(listener)
         }
         return nativeStart(handle, keyFile)
     }
+
+    fun txtRecords(airplay: Boolean): Array<String> = nativeGetTxt(handle, airplay)
 
     fun stop() {
         if (handle != 0L) {
@@ -25,7 +27,8 @@ internal class AirPlayNative(
     }
 
     private external fun nativeCreate(listener: Listener): Long
-    private external fun nativeStart(handle: Long, keyFile: String): Boolean
+    private external fun nativeStart(handle: Long, keyFile: String): Int
+    private external fun nativeGetTxt(handle: Long, airplay: Boolean): Array<String>
     private external fun nativeStop(handle: Long)
 
     companion object {

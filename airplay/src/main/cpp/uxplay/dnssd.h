@@ -47,7 +47,7 @@ typedef struct dnssd_s {
 
     unsigned char pin_pw;
     void *dnssd_private;
-  
+
 /* p2p support (macOS only) */
 #if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
     int peer_to_peer;
@@ -62,6 +62,8 @@ DNSSD_API dnssd_t *dnssd_init(const char *name, int name_len, const char *hw_add
 
 DNSSD_API int dnssd_register_raop(dnssd_t *dnssd, unsigned short port);
 DNSSD_API int dnssd_register_airplay(dnssd_t *dnssd, unsigned short port);
+DNSSD_API int dnssd_prepare_raop(dnssd_t *dnssd, unsigned short port);
+DNSSD_API int dnssd_prepare_airplay(dnssd_t *dnssd, unsigned short port);
 
 DNSSD_API void dnssd_unregister_raop(dnssd_t *dnssd);
 DNSSD_API void dnssd_unregister_airplay(dnssd_t *dnssd);

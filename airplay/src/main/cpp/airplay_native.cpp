@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstring>
 #include <mutex>
+#include <string>
 
 extern "C" {
 #include "dnssd.h"
@@ -94,13 +95,13 @@ Java_com_w_cast_airplay_AirPlayNative_nativeCreate(JNIEnv* env, jobject, jobject
     return reinterpret_cast<jlong>(engine);
 }
 
-extern "C" JNIEXPORT jboolean JNICALL
+extern "C" JNIEXPORT jint JNICALL
 Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong handle, jstring keyFile) {
     auto* engine = reinterpret_cast<AirPlayEngine*>(handle);
-    if (!engine || !keyFile) return JNI_FALSE;
+    if (!engine || !keyFile) return -1;
 
     const char* keyPath = env->GetStringUTFChars(keyFile, nullptr);
-    if (!keyPath) return JNI_FALSE;
+    if (!keyPath) return -1;
 
     raop_callbacks_t callbacks{};
     callbacks.cls = engine;
@@ -114,7 +115,7 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
         if (engine->raop) raop_destroy(engine->raop);
         engine->raop = nullptr;
         env->ReleaseStringUTFChars(keyFile, keyPath);
-        return JNI_FALSE;
+        return -1;
     }
     raop_set_log_level(engine->raop, LOGGER_WARNING);
     raop_set_log_callback(engine->raop, logMessage, engine);
@@ -130,24 +131,55 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
         raop_destroy(engine->raop);
         engine->raop = nullptr;
         env->ReleaseStringUTFChars(keyFile, keyPath);
-        return JNI_FALSE;
+        return -1;
     }
     raop_set_dnssd(engine->raop, engine->dnssd);
     unsigned short port = 0;
     if (raop_start_httpd(engine->raop, &port) != 0 ||
-        dnssd_register_raop(engine->dnssd, port) != 0 ||
-        dnssd_register_airplay(engine->dnssd, port) != 0) {
+        dnssd_prepare_raop(engine->dnssd, port) != 0 ||
+        dnssd_prepare_airplay(engine->dnssd, port) != 0) {
         dnssd_destroy(engine->dnssd);
         engine->dnssd = nullptr;
         raop_destroy(engine->raop);
         engine->raop = nullptr;
         env->ReleaseStringUTFChars(keyFile, keyPath);
-        return JNI_FALSE;
+        return -1;
     }
     engine->running = true;
     env->ReleaseStringUTFChars(keyFile, keyPath);
     __android_log_print(ANDROID_LOG_INFO, kTag, "AirPlay listening on port %u", port);
-    return JNI_TRUE;
+    return static_cast<jint>(port);
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_w_cast_airplay_AirPlayNative_nativeGetTxt(JNIEnv* env, jobject, jlong handle, jboolean airplay) {
+    auto* engine = reinterpret_cast<AirPlayEngine*>(handle);
+    if (!engine || !engine->dnssd) return nullptr;
+
+    int length = 0;
+    const char* raw = airplay
+        ? dnssd_get_airplay_txt(engine->dnssd, &length)
+        : dnssd_get_raop_txt(engine->dnssd, &length);
+    jclass stringClass = env->FindClass("java/lang/String");
+    int count = 0;
+    for (int offset = 0; offset < length;) {
+        const unsigned char itemLength = static_cast<unsigned char>(raw[offset]);
+        if (itemLength == 0 || offset + 1 + itemLength > length) break;
+        count++;
+        offset += itemLength + 1;
+    }
+    jobjectArray result = env->NewObjectArray(count, stringClass, nullptr);
+    int index = 0;
+    for (int offset = 0; offset < length && index < count;) {
+        const unsigned char itemLength = static_cast<unsigned char>(raw[offset++]);
+        std::string item(raw + offset, raw + offset + itemLength);
+        jstring value = env->NewStringUTF(item.c_str());
+        env->SetObjectArrayElement(result, index++, value);
+        env->DeleteLocalRef(value);
+        offset += itemLength;
+    }
+    env->DeleteLocalRef(stringClass);
+    return result;
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -156,8 +188,6 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStop(JNIEnv* env, jobject, jlong han
     if (!engine) return;
     engine->running = false;
     if (engine->dnssd) {
-        dnssd_unregister_airplay(engine->dnssd);
-        dnssd_unregister_raop(engine->dnssd);
         dnssd_destroy(engine->dnssd);
         engine->dnssd = nullptr;
     }

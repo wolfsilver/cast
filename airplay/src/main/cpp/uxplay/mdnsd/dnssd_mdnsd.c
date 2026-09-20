@@ -154,7 +154,7 @@ static int dnssd_build_airplay_txt(dnssd_t *dnssd_public)
         return -1;
     }
 
-    snprintf(features, sizeof(features), "0x%X,0x%X", dnssd_public->features1, dnssd_public->features2);    
+    snprintf(features, sizeof(features), "0x%X,0x%X", dnssd_public->features1, dnssd_public->features2);
     dnssd->airplay_record.length = 0;
 
     return mdnsd_txt_add(&dnssd->airplay_record, "deviceid", device_id) ||
@@ -237,10 +237,8 @@ dnssd_private_destroy(void *private)
 }
 
 int
-dnssd_register_raop(dnssd_t *dnssd_public, unsigned short port)
+dnssd_prepare_raop(dnssd_t *dnssd_public, unsigned short port)
 {
-    int ret;
-
     assert(dnssd_public);
     assert(dnssd_public->dnssd_private);
     dnssd_private_t *dnssd = (dnssd_private_t *) dnssd_public->dnssd_private;
@@ -253,6 +251,18 @@ dnssd_register_raop(dnssd_t *dnssd_public, unsigned short port)
     dnssd->raop_registered = 1;
     dnssd_update_mdnsd(dnssd);
 
+    return 0;
+}
+
+int
+dnssd_register_raop(dnssd_t *dnssd_public, unsigned short port)
+{
+    int ret = dnssd_prepare_raop(dnssd_public, port);
+    if (ret) {
+        return ret;
+    }
+    dnssd_private_t *dnssd = (dnssd_private_t *) dnssd_public->dnssd_private;
+
     ret = mdnsd_start(dnssd->mdnsd);
     if (!ret) {
         mdnsd_announce(dnssd->mdnsd, MDNSD_TTL_SERVICE);
@@ -262,10 +272,8 @@ dnssd_register_raop(dnssd_t *dnssd_public, unsigned short port)
 }
 
 int
-dnssd_register_airplay(dnssd_t *dnssd_public, unsigned short port)
+dnssd_prepare_airplay(dnssd_t *dnssd_public, unsigned short port)
 {
-    int ret;
-
     assert(dnssd_public);
     assert(dnssd_public->dnssd_private);
     dnssd_private_t *dnssd = (dnssd_private_t *) dnssd_public->dnssd_private;
@@ -277,6 +285,18 @@ dnssd_register_airplay(dnssd_t *dnssd_public, unsigned short port)
     dnssd->airplay_port = port;
     dnssd->airplay_registered = 1;
     dnssd_update_mdnsd(dnssd);
+
+    return 0;
+}
+
+int
+dnssd_register_airplay(dnssd_t *dnssd_public, unsigned short port)
+{
+    int ret = dnssd_prepare_airplay(dnssd_public, port);
+    if (ret) {
+        return ret;
+    }
+    dnssd_private_t *dnssd = (dnssd_private_t *) dnssd_public->dnssd_private;
 
     ret = mdnsd_start(dnssd->mdnsd);
     if (!ret) {
@@ -292,7 +312,7 @@ dnssd_get_raop_txt(dnssd_t *dnssd_public, int *length)
     assert(dnssd_public);
     assert(dnssd_public->dnssd_private);
     dnssd_private_t *dnssd = (dnssd_private_t *) dnssd_public->dnssd_private;
-    
+
     *length = dnssd->raop_record.length;
     return (const char *) dnssd->raop_record.bytes;
 }
