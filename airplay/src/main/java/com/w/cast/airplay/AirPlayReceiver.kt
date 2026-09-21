@@ -20,8 +20,8 @@ class AirPlayReceiver(
 
     private val appContext = context.applicationContext
     private val nsdManager = appContext.getSystemService(NsdManager::class.java)
-    private val videoDecoder = AirPlayVideoDecoder()
-    private val audioDecoder = AirPlayAudioDecoder()
+    private val videoDecoder = AirPlayVideoDecoder { message -> log(message) }
+    private val audioDecoder = AirPlayAudioDecoder { message -> log(message) }
     private val nativeEngine = AirPlayNative(this)
     private val registrations = mutableListOf<NsdManager.RegistrationListener>()
 

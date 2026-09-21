@@ -41,36 +41,73 @@ void emitLog(AirPlayEngine* engine, const char* message) {
     JNIEnv* env = attach(engine);
     if (!env) return;
     jstring value = env->NewStringUTF(message ? message : "");
-    if (!value) return;
+    if (!value) {
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+        }
+        return;
+    }
     env->CallVoidMethod(engine->callback, engine->onLog, value);
+    if (env->ExceptionCheck()) {
+        env->ExceptionDescribe();
+        env->ExceptionClear();
+    }
     env->DeleteLocalRef(value);
+}
+
+void reportJavaException(AirPlayEngine* engine, JNIEnv* env, const char* stage) {
+    if (!env->ExceptionCheck()) return;
+    __android_log_print(ANDROID_LOG_ERROR, kTag, "Java exception in %s", stage);
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    const std::string message = std::string("native: Java 回调异常，已清理: ") + stage;
+    emitLog(engine, message.c_str());
 }
 
 void sendVideo(void* opaque, raop_ntp_t*, video_decode_struct* frame) {
     auto* engine = static_cast<AirPlayEngine*>(opaque);
-    if (!engine->running || !frame || frame->data_len <= 0) return;
+    if (!engine || !engine->running || !frame || !frame->data || frame->data_len <= 0) return;
     JNIEnv* env = attach(engine);
     if (!env) return;
     jbyteArray data = env->NewByteArray(frame->data_len);
-    if (!data) return;
+    if (!data) {
+        reportJavaException(engine, env, "NewByteArray(video)");
+        return;
+    }
     env->SetByteArrayRegion(data, 0, frame->data_len, reinterpret_cast<const jbyte*>(frame->data));
+    if (env->ExceptionCheck()) {
+        reportJavaException(engine, env, "SetByteArrayRegion(video)");
+        env->DeleteLocalRef(data);
+        return;
+    }
     env->CallVoidMethod(engine->callback, engine->onVideoFrame, data,
                         frame->is_h265 ? JNI_TRUE : JNI_FALSE,
                         static_cast<jlong>(frame->ntp_time_remote));
+    reportJavaException(engine, env, "onVideoFrame");
     env->DeleteLocalRef(data);
 }
 
 void sendAudio(void* opaque, raop_ntp_t*, audio_decode_struct* frame) {
     auto* engine = static_cast<AirPlayEngine*>(opaque);
-    if (!engine->running || !frame || frame->data_len <= 0) return;
+    if (!engine || !engine->running || !frame || !frame->data || frame->data_len <= 0) return;
     JNIEnv* env = attach(engine);
     if (!env) return;
     jbyteArray data = env->NewByteArray(frame->data_len);
-    if (!data) return;
+    if (!data) {
+        reportJavaException(engine, env, "NewByteArray(audio)");
+        return;
+    }
     env->SetByteArrayRegion(data, 0, frame->data_len, reinterpret_cast<const jbyte*>(frame->data));
+    if (env->ExceptionCheck()) {
+        reportJavaException(engine, env, "SetByteArrayRegion(audio)");
+        env->DeleteLocalRef(data);
+        return;
+    }
     env->CallVoidMethod(engine->callback, engine->onAudioFrame, data,
                         static_cast<jint>(frame->ct),
                         static_cast<jlong>(frame->ntp_time_remote));
+    reportJavaException(engine, env, "onAudioFrame");
     env->DeleteLocalRef(data);
 }
 
