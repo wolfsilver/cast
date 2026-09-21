@@ -199,7 +199,7 @@ raop_rtp_mirror_thread(void *arg)
     bool unsupported_codec = false;
     bool video_stream_suspended = false;
     bool first_packet = true;
-    
+
     while (1) {
         fd_set rfds;
         struct timeval tv;
@@ -313,7 +313,7 @@ raop_rtp_mirror_thread(void *arg)
                 if (sock_err == SOCKET_ERRORNAME(EAGAIN) || sock_err == SOCKET_ERRORNAME(EWOULDBLOCK)) continue; // Timeouts can happen even if the connection is fine
                 logger_log(raop_rtp_mirror->logger, LOGGER_ERR,
                            "raop_rtp_mirror error  in header recv: %d %s", sock_err, SOCKET_ERROR_STRING(sock_err));
-                if (sock_err == SOCKET_ERRORNAME(ECONNRESET)) conn_reset = true;; 
+                if (sock_err == SOCKET_ERRORNAME(ECONNRESET)) conn_reset = true;;
                 break;
             }
 
@@ -357,7 +357,7 @@ raop_rtp_mirror_thread(void *arg)
              * 0x1e 0x00 : old protocol (seen in AirMyPC) no-payload once-per-second packets     *
              * 0x16 0x01 : seen in most unencrypted h264  SPS+PPS packets                        *
              * 0x56 0x01 : unencrypted h264 SPS+PPS packets (video stream stops, client sleeps)  *
-             * 0x1e 0x01 : unencrypted h265/HEVC SPS+PPS packets                                 
+             * 0x1e 0x01 : unencrypted h265/HEVC SPS+PPS packets
              * 0x5e 0x01 : unencrypted h265 SPS+PPS packets (video stream stops, client sleeps)  */
 
             /* unencrypted packets with a SPS and a PPS NAL are sent initially, and also when a  *
@@ -428,13 +428,13 @@ raop_rtp_mirror_thread(void *arg)
                  *           7   Sequence parameter set (SPS)
                  *           8   Picture parameter set (PPS)
                  *
-                 * if a previous unencrypted packet contains an SPS (type 7) and PPS (type 8) NAL which has not 
-                 * yet been sent, it should be prepended to the current NAL.    The M1 Macs have increased the h264 level, 
-                 * and now the first  encrypted packet after the  unencrypted SPS+PPS packet may also contain a SEI (type 6) NAL 
+                 * if a previous unencrypted packet contains an SPS (type 7) and PPS (type 8) NAL which has not
+                 * yet been sent, it should be prepended to the current NAL.    The M1 Macs have increased the h264 level,
+                 * and now the first  encrypted packet after the  unencrypted SPS+PPS packet may also contain a SEI (type 6) NAL
                  * prepended to its VCL NAL.
                  *
-                 * The flag prepend_sps_pps = true will signal that the  previous packet contained a SPS NAL + a PPS NAL, 
-                 * that has not yet been sent.   This will trigger prepending it to the current NAL, and the prepend_sps_pps 
+                 * The flag prepend_sps_pps = true will signal that the  previous packet contained a SPS NAL + a PPS NAL,
+                 * that has not yet been sent.   This will trigger prepending it to the current NAL, and the prepend_sps_pps
                  * flag will be set to false after it has been prepended.  */
 
                 if (prepend_sps_pps & (ntp_timestamp_raw != ntp_timestamp_nal)) {
@@ -445,7 +445,7 @@ raop_rtp_mirror_thread(void *arg)
                         sps_pps = NULL;
                         prepend_sps_pps = false;
                 }
-		
+
                 if (prepend_sps_pps) {
                     assert(sps_pps);
                     payload_out = (unsigned char*) malloc(payload_size + sps_pps_len);
@@ -521,8 +521,8 @@ raop_rtp_mirror_thread(void *arg)
                             break;
                         case 6:
                             if (logger_debug) {
-                                char *str = utils_data_to_string(payload_decrypted + nalu_size, nc_len, 16); 
-                                logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "raop_rtp_mirror SEI NAL size = %d", nc_len);		
+                                char *str = utils_data_to_string(payload_decrypted + nalu_size, nc_len, 16);
+                                logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "raop_rtp_mirror SEI NAL size = %d", nc_len);
                                 logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG,
                                            "raop_rtp_mirror h264 Supplemental Enhancement Information:\n%s", str);
                                 free(str);
@@ -530,8 +530,8 @@ raop_rtp_mirror_thread(void *arg)
                             break;
                         case 7:
                             if (logger_debug) {
-                                char *str = utils_data_to_string(payload_decrypted + nalu_size, nc_len, 16); 
-                                logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "raop_rtp_mirror SPS NAL size = %d", nc_len);		
+                                char *str = utils_data_to_string(payload_decrypted + nalu_size, nc_len, 16);
+                                logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "raop_rtp_mirror SPS NAL size = %d", nc_len);
                                 logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG,
                                            "raop_rtp_mirror h264 Sequence Parameter Set:\n%s", str);
                                 free(str);
@@ -539,8 +539,8 @@ raop_rtp_mirror_thread(void *arg)
                             break;
                         case 8:
                             if (logger_debug) {
-                                char *str = utils_data_to_string(payload_decrypted + nalu_size, nc_len, 16); 
-                                logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "raop_rtp_mirror PPS NAL size = %d", nc_len);		
+                                char *str = utils_data_to_string(payload_decrypted + nalu_size, nc_len, 16);
+                                logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "raop_rtp_mirror PPS NAL size = %d", nc_len);
                                 logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG,
                                            "raop_rtp_mirror h264 Picture Parameter Set :\n%s", str);
                                 free(str);
@@ -564,7 +564,7 @@ raop_rtp_mirror_thread(void *arg)
                     }
                 }
 
-		
+
                 payload_decrypted = NULL;
                 video_decode_struct video_data;
                 video_data.is_h265 = h265_video;
@@ -586,7 +586,7 @@ raop_rtp_mirror_thread(void *arg)
                 free(payload_out);
                 break;
             case 0x01:
-                /* 128-byte observed packet header structure 
+                /* 128-byte observed packet header structure
                    bytes 0-15: length + timestamp
                    bytes 16-19 float width_source   (value is x.0000, x = unsigned short)
                    bytes 20-23 float height_source  (value is x.0000, x = unsigned short)
@@ -595,11 +595,11 @@ raop_rtp_mirror_thread(void *arg)
                    bytes 44-47 float height_source  (value is x.0000, x = unsigned short)
                    bytes 48-51 ??? float "other_w"  (value seems to be x.0000, x = unsigned short)
                    bytes 48-51 ??? float "other_h"  (value seems to be x.0000, x = unsigned short)
-                   bytes 56-59 width 
-                   bytes 60-63 height 
-                   bytes 64-127 all 0x0 
+                   bytes 56-59 width
+                   bytes 60-63 height
+                   bytes 64-127 all 0x0
                 */
-	      
+
                 // The information in the payload contains an SPS and a PPS NAL
                 // The sps_pps is not encrypted
                 logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "\nReceived unencrypted codec packet from client:"
@@ -621,7 +621,7 @@ raop_rtp_mirror_thread(void *arg)
                 ntp_timestamp_nal = ntp_timestamp_raw;
 
                 /* these "floats" are in fact integers that fit into unsigned shorts */
-                float width_0 = byteutils_get_float(packet, 16);  
+                float width_0 = byteutils_get_float(packet, 16);
                 float height_0 = byteutils_get_float(packet, 20);
                 float width_source = byteutils_get_float(packet, 40);    // duplication of width_0
                 float height_source = byteutils_get_float(packet, 44);   // duplication of height_0
@@ -688,7 +688,7 @@ raop_rtp_mirror_thread(void *arg)
                         break;
                     }
                     unsigned char * ptr = payload + 0x75;
- 
+
                     if (memcmp(ptr, vps_start_code, 4)) {
                         logger_log(raop_rtp_mirror->logger, LOGGER_ERR, "non-conforming HEVC VPS/SPS/PPS payload (VPS)");
                         raop_rtp_mirror->callbacks.video_pause(raop_rtp_mirror->callbacks.cls);
@@ -738,7 +738,7 @@ raop_rtp_mirror_thread(void *arg)
                         break;
                     }
                     if (memcmp(ptr, pps_start_code, 4)) {
-                       logger_log(raop_rtp_mirror->logger, LOGGER_ERR, "non-conforming HEVC VPS/SPS/PPS payload (PPS)");			
+                       logger_log(raop_rtp_mirror->logger, LOGGER_ERR, "non-conforming HEVC VPS/SPS/PPS payload (PPS)");
                         raop_rtp_mirror->callbacks.video_pause(raop_rtp_mirror->callbacks.cls);
                         break;
                     }
@@ -809,11 +809,11 @@ raop_rtp_mirror_thread(void *arg)
                     int data_size = 6;
                     if (logger_debug) {
                         char *str = utils_data_to_string(payload, data_size, 16);
-                        logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "raop_rtp_mirror: SPS+PPS header size = %d", data_size);		
+                        logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "raop_rtp_mirror: SPS+PPS header size = %d", data_size);
                         logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "raop_rtp_mirror h264 SPS+PPS header:\n%s", str);
                         free(str);
                         str = utils_data_to_string(sequence_parameter_set, sps_size,16);
-                        logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "raop_rtp_mirror SPS NAL size = %d",  sps_size);		
+                        logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "raop_rtp_mirror SPS NAL size = %d",  sps_size);
                         logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "raop_rtp_mirror h264 Sequence Parameter Set:\n%s", str);
                         free(str);
                         str = utils_data_to_string(picture_parameter_set, pps_size, 16);
@@ -821,7 +821,7 @@ raop_rtp_mirror_thread(void *arg)
                         logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "raop_rtp_mirror h264 Picture Parameter Set:\n%s", str);
                         free(str);
                     }
-                    data_size = payload_size - sps_size - pps_size - 11; 
+                    data_size = payload_size - sps_size - pps_size - 11;
                     if (data_size > 0 && logger_debug) {
                         char *str = utils_data_to_string (picture_parameter_set + pps_size, data_size, 16);
                         logger_log(raop_rtp_mirror->logger, LOGGER_INFO, "remainder size = %d", data_size);
@@ -837,7 +837,7 @@ raop_rtp_mirror_thread(void *arg)
                     assert(sps_pps);
                     memcpy(sps_pps, nal_start_code, 4);
                     memcpy(sps_pps + 4, sequence_parameter_set, sps_size);
-                    memcpy(sps_pps + sps_size + 4, nal_start_code, 4); 
+                    memcpy(sps_pps + sps_size + 4, nal_start_code, 4);
                     memcpy(sps_pps + sps_size + 8, payload + sps_size + 11, pps_size);
                 }
                 prepend_sps_pps = true;
@@ -872,7 +872,7 @@ raop_rtp_mirror_thread(void *arg)
                     //char *str = utils_data_to_string(packet, 128, 16);
                     //logger_log(raop_rtp_mirror->logger, LOGGER_WARNING, "type 5 video packet header:\n%s", str);
                     //free (str);
-		    
+
                     int plist_size = payload_size;
                     if (payload_size > 25000) {
                         plist_size = payload_size - 25000;
@@ -989,7 +989,7 @@ raop_rtp_mirror_start(raop_rtp_mirror_t *raop_rtp_mirror, unsigned short *mirror
         use_ipv6 = 1;
     }
     //use_ipv6 = 0;
-     
+
     raop_rtp_mirror->mirror_data_lport = *mirror_data_lport;
     if (raop_rtp_mirror_init_socket(raop_rtp_mirror, use_ipv6) < 0) {
         logger_log(raop_rtp_mirror->logger, LOGGER_ERR, "raop_rtp_mirror initializing socket failed");
