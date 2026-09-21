@@ -159,7 +159,7 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
     raop_set_dnssd(engine->raop, engine->dnssd);
     unsigned short port = 0;
     const int httpdResult = raop_start_httpd(engine->raop, &port);
-    if (httpdResult != 0) {
+    if (httpdResult < 0) {
         const std::string errorMessage =
             "native: HTTP/RTSP 监听启动失败，返回码 " + std::to_string(httpdResult) +
             "，系统错误 " + std::to_string(errno);
