@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <atomic>
+#include <cerrno>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -157,8 +158,12 @@ Java_com_w_cast_airplay_AirPlayNative_nativeStart(JNIEnv* env, jobject, jlong ha
     }
     raop_set_dnssd(engine->raop, engine->dnssd);
     unsigned short port = 0;
-    if (raop_start_httpd(engine->raop, &port) != 0) {
-        emitLog(engine, "native: HTTP/RTSP 监听启动失败");
+    const int httpdResult = raop_start_httpd(engine->raop, &port);
+    if (httpdResult != 0) {
+        const std::string errorMessage =
+            "native: HTTP/RTSP 监听启动失败，返回码 " + std::to_string(httpdResult) +
+            "，系统错误 " + std::to_string(errno);
+        emitLog(engine, errorMessage.c_str());
         dnssd_destroy(engine->dnssd);
         engine->dnssd = nullptr;
         raop_destroy(engine->raop);

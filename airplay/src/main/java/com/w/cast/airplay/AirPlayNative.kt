@@ -12,10 +12,19 @@ internal class AirPlayNative(
     private var handle: Long = 0
 
     fun start(keyFile: String): Int {
-        if (handle == 0L) {
-            handle = nativeCreate(listener)
+        if (handle != 0L) {
+            nativeStop(handle)
+            handle = 0L
         }
-        return nativeStart(handle, keyFile)
+        handle = nativeCreate(listener)
+        if (handle == 0L) return -1
+
+        val result = nativeStart(handle, keyFile)
+        if (result <= 0) {
+            nativeStop(handle)
+            handle = 0L
+        }
+        return result
     }
 
     fun txtRecords(airplay: Boolean): Array<String> =

@@ -99,7 +99,7 @@ httpd_set_connection_type (httpd_t *httpd, void *user_data, connection_type_t ty
     }
     return -1;
 }
-  
+
 int
 httpd_count_connection_type (httpd_t *httpd, connection_type_t type) {
     int count = 0;
@@ -166,7 +166,7 @@ httpd_init(logger_t *logger, httpd_callbacks_t *callbacks, int nohold)
     }
 
     httpd->nohold = (nohold ? 1 : 0);
-    httpd->max_connections = MAX_CONNECTIONS;  
+    httpd->max_connections = MAX_CONNECTIONS;
     httpd->connections = calloc(httpd->max_connections, sizeof(http_connection_t));
     if (!httpd->connections) {
         free(httpd);
@@ -187,6 +187,14 @@ httpd_init(logger_t *logger, httpd_callbacks_t *callbacks, int nohold)
     /* Save callback pointers */
     memcpy(&httpd->callbacks, callbacks, sizeof(httpd_callbacks_t));
 
+    httpd->server_fd4 = -1;
+    httpd->server_fd6 = -1;
+    if (MUTEX_CREATE(httpd->run_mutex) != 0) {
+        free(httpd->connections);
+        free(httpd);
+        return NULL;
+    }
+
     /* Initial status joined */
     httpd->running = 0;
     httpd->joined = 1;
@@ -200,6 +208,7 @@ httpd_destroy(httpd_t *httpd)
     if (httpd) {
         httpd_stop(httpd);
         free(httpd->connections);
+        MUTEX_DESTROY(httpd->run_mutex);
         free(httpd);
     }
 }
@@ -308,16 +317,16 @@ httpd_accept_connection(httpd_t *httpd, int server_fd, int is_ipv6)
         return 0;
     }
 
-    local = netutils_get_address(&local_saddr, &local_len, &local_zone_id, &port);   
+    local = netutils_get_address(&local_saddr, &local_len, &local_zone_id, &port);
     logger_log(httpd->logger, LOGGER_INFO, "Accepted %s client on socket %d, port %u",
                (is_ipv6 ? "IPv6"  : "IPv4"), fd, port);
     remote = netutils_get_address(&remote_saddr, &remote_len, &remote_zone_id, NULL);
 
-    // is it correct that ipv6 link-local local and remote zone id should be the same, as asserted below? 
+    // is it correct that ipv6 link-local local and remote zone id should be the same, as asserted below?
     if (local_zone_id != remote_zone_id) {
         logger_log(httpd->logger, LOGGER_INFO, "ipv6 zone_id mismatch: local_zone_id = %u, remote_zone_id = %u",
 		   local_zone_id, remote_zone_id);
-    }      
+    }
     assert (local_zone_id == remote_zone_id);
 
     ret = httpd_add_connection(httpd, fd, local, local_len, remote, remote_len, local_zone_id);
@@ -522,7 +531,7 @@ httpd_thread(void *arg)
                     continue;
                 }
                 if (!memcmp(buffer, http, 8) || !memcmp(buffer, event, 8)) {
-                    http_request_set_reverse(connection->request);  
+                    http_request_set_reverse(connection->request);
                 }
             } else {
                 int ret = recv(connection->socket_fd, buffer, sizeof(buffer), 0);
@@ -667,27 +676,28 @@ httpd_start(httpd_t *httpd, unsigned short *port)
 
     httpd->server_fd4 = netutils_init_socket(port, 0, 0);
     if (httpd->server_fd4 == -1) {
-        logger_log(httpd->logger, LOGGER_ERR, "Error initialising socket %d", SOCKET_GET_ERROR());
+        logger_log(httpd->logger, LOGGER_WARNING, "Error initialising IPv4 socket %d", SOCKET_GET_ERROR());
+    }
+    httpd->server_fd6 = netutils_init_socket(port, 1, 0);
+    if (httpd->server_fd6 == -1) {
+        logger_log(httpd->logger, LOGGER_WARNING, "Error initialising IPv6 socket %d", SOCKET_GET_ERROR());
+    }
+    if (httpd->server_fd4 == -1 && httpd->server_fd6 == -1) {
         MUTEX_UNLOCK(httpd->run_mutex);
         return -1;
     }
-    httpd->server_fd6 = netutils_init_socket(port, 1, 0);
-        if (httpd->server_fd6 == -1) {
-            logger_log(httpd->logger, LOGGER_WARNING, "Error initialising IPv6 socket %d", SOCKET_GET_ERROR());
-            logger_log(httpd->logger, LOGGER_WARNING, "Continuing without IPv6 support");
-        }
 
     if (httpd->server_fd4 != -1 && listen(httpd->server_fd4, backlog) == -1) {
-        logger_log(httpd->logger, LOGGER_ERR, "Error listening to IPv4 socket");
+        logger_log(httpd->logger, LOGGER_WARNING, "Error listening to IPv4 socket %d", SOCKET_GET_ERROR());
         CLOSESOCKET(httpd->server_fd4);
-        CLOSESOCKET(httpd->server_fd6);
-        MUTEX_UNLOCK(httpd->run_mutex);
-        return -2;
+        httpd->server_fd4 = -1;
     }
     if (httpd->server_fd6 != -1 && listen(httpd->server_fd6, backlog) == -1) {
-        logger_log(httpd->logger, LOGGER_ERR, "Error listening to IPv6 socket");
-        CLOSESOCKET(httpd->server_fd4);
+        logger_log(httpd->logger, LOGGER_WARNING, "Error listening to IPv6 socket %d", SOCKET_GET_ERROR());
         CLOSESOCKET(httpd->server_fd6);
+        httpd->server_fd6 = -1;
+    }
+    if (httpd->server_fd4 == -1 && httpd->server_fd6 == -1) {
         MUTEX_UNLOCK(httpd->run_mutex);
         return -2;
     }
