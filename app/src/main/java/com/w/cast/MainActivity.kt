@@ -2,6 +2,8 @@ package com.w.cast
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -11,9 +13,11 @@ import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.graphics.Typeface
+import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
     private lateinit var surfaceView: SurfaceView
@@ -83,6 +87,22 @@ class MainActivity : Activity() {
         val logScroll = ScrollView(this).apply {
             addView(logView)
         }
+        val copyLogsButton = Button(this).apply {
+            text = "复制日志"
+            isAllCaps = false
+            setOnClickListener { copyLogs() }
+        }
+        val logPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(copyLogsButton, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            val logLayoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0
+            ).apply {
+                weight = 1f
+            }
+            addView(logScroll, logLayoutParams)
+        }
         val logHeight = (220 * resources.displayMetrics.density).toInt()
 
         return LinearLayout(this).apply {
@@ -95,7 +115,7 @@ class MainActivity : Activity() {
                     weight = 1f
                 }
             )
-            addView(logScroll, LinearLayout.LayoutParams.MATCH_PARENT, logHeight)
+            addView(logPanel, LinearLayout.LayoutParams.MATCH_PARENT, logHeight)
         }
     }
 
@@ -105,6 +125,17 @@ class MainActivity : Activity() {
         logView.append(line)
         val scrollView = logView.parent as? ScrollView
         scrollView?.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+    }
+
+    private fun copyLogs() {
+        val logs = logView.text.toString()
+        if (logs.isBlank()) {
+            Toast.makeText(this, "暂无日志", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val clipboard = getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText("i投屏日志", logs))
+        Toast.makeText(this, "日志已复制", Toast.LENGTH_SHORT).show()
     }
 
     private fun startMirrorService() {
